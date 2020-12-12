@@ -1,0 +1,37 @@
+{
+  "general": {
+    "live": true,
+    "language": "english",
+    "timeformat": "%Y-%m-%d %H:%M:%S",
+    "uniquename": "name",
+    "timeprecision": "seconds"
+  },
+  "twitter": {
+    "terms": [
+      "trump"
+    ],
+    "languages": [
+      "en"
+    ],
+    "api-key": "###",
+    "api-secret": "###",
+    "access-token": "###",
+    "access-secret": "###"
+  },
+  "csv": {
+    "file": "dataset.csv",
+    "newline": "\n",
+    "sep": "|",
+    "quote": ";",
+    "col_id": 0,
+    "col_time": 0,
+    "col_text": 1,
+    "col_label": 2
+  },
+  "inmemory": {
+    "col_id": 0,
+    "col_time": 3,
+    "col_text": 1,
+    "label": null
+  }
+}

@@ -1,0 +1,14 @@
+{
+        "lambda":0.001,
+        "termfading":true,
+        "tgap": 10.0,
+        "radius":0.7,
+        "realtimefading":true,
+        "micro_distance":"tfidf_cosine_distance",
+        "macro_distance":"tfidf_cosine_distance",
+        "model":null,
+        "idf": true,
+        "num_macro":5,
+        "minWeight": 1,
+        "embedding_verification":false
+}
