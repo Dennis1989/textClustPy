@@ -74,7 +74,8 @@ class textclust:
     def __init__(self, radius=0.3, _lambda=0.0005, tgap=100, verbose=None,
                  termfading=True, realtimefading=True, micro_distance="tfidf_cosine_distance",
                  macro_distance="cosine_distance", model=None, idf=True,
-                 num_macro=3, minWeight=0, config=None, embedding_verification=False, callback=None
+                 num_macro=3, minWeight=0, config=None, embedding_verification=False, callback=None, 
+                 auto_r = False, auto_merge = True
                  ):
         if config is not None:
             self.conf = self.loadconfig(config)
@@ -91,6 +92,8 @@ class textclust:
             self.numMacro = self.conf["num_macro"]
             self.realtimefading = self.conf["realtimefading"]
             self.minWeight = self.conf["minWeight"]
+            self.auto_r = self.conf["auto_r"]
+            self.auto_merge = self.conf["auto_merge"]
             self.callback = callback
 
         # if no config is provided, load parameter setting
@@ -110,12 +113,14 @@ class textclust:
             self.numMacro = self.conf["num_macro"] = num_macro
             self.realtimefading = self.conf["realtimefading"] = realtimefading
             self.minWeight = self.conf["minWeight"] = minWeight
+            self.auto_r = auto_r
+            self.auto_merge = auto_merge
             self.callback = callback
 
         # Initialize important values
         #self.callback = None
         self.t = None
-        self.lastCleanup = None
+        self.lastCleanup = 0
         self.avgweight = 0
         self.n = 1
         self.omega = 2**(-1*self._lambda * self.tgap)
@@ -126,6 +131,7 @@ class textclust:
         self.microToMacro = None
         self.upToDate = False
         self.realtime = None
+        self.distsum = []
 
         # log settings
         logger.info("---------------------------------------------------------")
@@ -143,8 +149,9 @@ class textclust:
         logger.info("realtimefading: {}".format(self.realtimefading))
         logger.info("omega: {}".format(self.omega))
         logger.info("minWeight: {}".format(self.minWeight))
-        logger.info("embedding verficiation: {}".format(
-            self.embedding_verification))
+        logger.info("auto_r: {}".format(self.auto_r))
+        logger.info("auto_r: {}".format(self.auto_r))
+        logger.info("auto_merge: {}".format(self.auto_merge))
         logger.info("---------------------------------------------------------")
 
         # if word embeddings are used, models have to be initialized
@@ -270,10 +277,14 @@ class textclust:
                     min_dist = dist
                     smallest_key = key
 
-                if dist <= self.radius:
-                    #min_dist = dist
-                    clusterId = key
-
+                    if dist <= self.radius:
+                        #min_dist = dist
+                        clusterId = key
+            
+            if self.auto_r:
+                ## add distance aggregation
+                self.distsum.append(min_dist)
+            
             # if embedding verification is on, we test closest distance according to embedding method
             if self.embedding_verification is True and smallest_key is not None and clusterId is None:
 
@@ -284,13 +295,15 @@ class textclust:
                     #min_dist = dist
                     print(list(mc.tf.keys()))
                     print(list(self.microclusters[smallest_key].tf.keys()))
-                    #print("verify embedding dist")
-                    # print(dist2)
                     # print("---------------------")
                     clusterId = key
 
             # if we found a cluster that is close enough we merge our incoming data into it
             if clusterId is not None:
+                
+                ## add number of observations
+                self.microclusters[clusterId].n += 1
+
                 self.microclusters[clusterId].merge(
                     mc, self.t, self.omega, self._lambda, self.termfading, self.realtime)
                 self.assignment[self.n] = clusterId
@@ -339,7 +352,6 @@ class textclust:
                     clusters[row], clusters[col], idf)
                 distances.loc[row, col] = dist
                 distances.loc[col, row] = dist
-        print(distances)
         return distances
 
     # calculate idf based in all micro-clusters
@@ -378,12 +390,59 @@ class textclust:
 
         # update curren cluster weights
         self.updateweights()
+  
 
         # set deltaweights
         for micro in self.microclusters.values():
+            
             # here we compute delta weights
             micro.deltaweight = micro.weight - micro.oldweight
             micro.oldweight = micro.weight
+
+           
+        # if average of the average distances are in quantile, change the radius
+        if self.auto_r:
+            self.adjust_radius()
+
+        # if auto merge is enabled, close micro clusters are merged together
+        if self.auto_merge:
+            self.mergemicroclusters()
+
+               
+    def mergemicroclusters(self):
+        micro_keys = [*self.microclusters]
+
+
+        idf = self.calculateIDF(self.microclusters.values())
+        i = 0
+        while i < len(self.microclusters):
+            j = i+1
+            while j < len(self.microclusters):
+                m_dist = self.micro_distance.dist(self.microclusters[micro_keys[i]], self.microclusters[micro_keys[j]], idf)
+                ## lets merge them
+                if m_dist < self.radius:
+                    print("merge")
+                    self.microclusters[micro_keys[i]].merge(
+                    self.microclusters[micro_keys[j]], self.t, self.omega, self._lambda, self.termfading, self.realtime)
+                    del(self.microclusters[micro_keys[j]])
+                    del(micro_keys[j])
+                else:
+                    j = j+1 
+            i = i+1
+            
+
+    def adjust_radius(self):
+        median = statistics.median(self.distsum)
+        if median >self.radius:
+            self.radius = self.radius + 0.05
+        else:
+            self.radius = self.radius - 0.05
+
+        logger.info("adjusted radius: {}".format(self.radius))
+        
+        # delete knowledge about distance
+        self.distsum.clear()
+
 
     # show the contents of a specific micro cluster
     def showmicrocluster(self, id, num):
