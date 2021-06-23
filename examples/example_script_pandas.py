@@ -14,7 +14,7 @@ df = pd.read_csv(z.open('newsCorpora.csv'), sep="\t", header=None)
 df[7] = [datetime.fromtimestamp(x/1000) for x in df[7]]
 
 ## create textclust instance
-clust = textclust(radius=0.7, _lambda=0.05)
+clust = textclust(radius=0.7, _lambda=0.05,config="textclust_config.json")
 preprocessor = Preprocessor(max_grams=2)
 
 ## create input
