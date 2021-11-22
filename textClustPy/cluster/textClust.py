@@ -1,6 +1,6 @@
 from textClustPy.cluster.microcluster import microcluster
 from textClustPy.cluster.distances import distances
-#from textClustPy.util.inkrementalskip import inkrementalskip
+
 
 # we use sklearn for traditional clustering
 from sklearn.cluster import AgglomerativeClustering
@@ -16,6 +16,8 @@ import pandas as pd
 import nltk
 import statistics
 import json
+
+
 from copy import deepcopy
 import threading
 
@@ -73,8 +75,9 @@ class textclust:
     # constructor with default specification
     def __init__(self, radius=0.3, _lambda=0.0005, tgap=100, verbose=None,
                  termfading=True, realtimefading=True, micro_distance="tfidf_cosine_distance",
-                 macro_distance="tfidf_cosine_distance", model=None, idf=True,
-                 num_macro=3, minWeight=0, config=None, embedding_verification=False, callback=None
+                 macro_distance="cosine_distance", model=None, idf=True,
+                 num_macro=3, minWeight=0, config=None, embedding_verification=False, callback=None, 
+                 auto_r = False, auto_merge = True, sigma= 1
                  ):
         if config is not None:
             self.conf = self.loadconfig(config)
@@ -91,7 +94,10 @@ class textclust:
             self.numMacro = self.conf["num_macro"]
             self.realtimefading = self.conf["realtimefading"]
             self.minWeight = self.conf["minWeight"]
+            self.auto_r = self.conf["auto_r"]
+            self.auto_merge = self.conf["auto_merge"]
             self.callback = callback
+            self.sigma = sigma
 
         # if no config is provided, load parameter setting
         else:
@@ -110,12 +116,16 @@ class textclust:
             self.numMacro = self.conf["num_macro"] = num_macro
             self.realtimefading = self.conf["realtimefading"] = realtimefading
             self.minWeight = self.conf["minWeight"] = minWeight
+            self.auto_r = auto_r
+            self.auto_merge = auto_merge
             self.callback = callback
+            self.sigma = sigma
 
         # Initialize important values
         #self.callback = None
+        self.num_merged_obs = 0
         self.t = None
-        self.lastCleanup = None
+        self.lastCleanup = 0
         self.avgweight = 0
         self.n = 1
         self.omega = 2**(-1*self._lambda * self.tgap)
@@ -126,7 +136,9 @@ class textclust:
         self.microToMacro = None
         self.upToDate = False
         self.realtime = None
-
+        self.distsum = []
+        self.dist_mean = 0
+        self.outlier_dist_square = 0
         # log settings
         logger.info("---------------------------------------------------------")
         logger.info("Starting textclust with the following configuration: ")
@@ -143,23 +155,17 @@ class textclust:
         logger.info("realtimefading: {}".format(self.realtimefading))
         logger.info("omega: {}".format(self.omega))
         logger.info("minWeight: {}".format(self.minWeight))
-        logger.info("embedding verficiation: {}".format(
-            self.embedding_verification))
+        logger.info("auto_r: {}".format(self.auto_r))
+        logger.info("auto_merge: {}".format(self.auto_merge))
         logger.info("---------------------------------------------------------")
 
         # if word embeddings are used, models have to be initialized
         if(self.model is not None and isinstance(self.model, str)):
-            if self.model == "incrementalskip":
-                print("incrementalskip is unsupported")
-            # if self.model == "incrementalskip":
-            #    logger.info("initializing incremental skip gram")
-            #    self.model = inkrementalskip()
-            else:
-                logger.info("loading pre-trained word embedding model")
-                self.model = api.load(self.model)
-                logger.info("normalize model")
-                self.model.init_sims(replace=True)
-                logger.info("model normalized")
+            logger.info("loading pre-trained word embedding model")
+            self.model = api.load(self.model)
+            logger.info("normalize model")
+            self.model.init_sims(replace=True)
+            logger.info("model normalized")
 
         # create a new distance instance for micro and macro distances.
         # from now the correct distance measure, specified in the config is used
@@ -256,44 +262,87 @@ class textclust:
             if self.idf == True:
                 idf = self.calculateIDF(self.microclusters.values())
 
-            # set minimum distance to the predefined radius
-            min_dist = np.inf
+            # set minimum distance to 1
+            min_dist = 1
             smallest_key = None
-
+            
+            sumdist= 0
+            squaresum = 0
+            counter = 0
             # calculate distances and choose the smallest one
             for key in self.microclusters.keys():
 
                 dist = self.micro_distance.dist(
                     mc, self.microclusters[key], idf)
+                
+                ## only of the distance is somehow term related
 
-                if dist <= min_dist:
-                    min_dist = dist
+                counter     = counter + 1
+                sumdist    += dist
+                squaresum  += dist**2
+
+                ## store minimum distance and smallest key
+                if dist < min_dist:
+                    min_dist     = dist
                     smallest_key = key
 
-                if dist <= self.radius:
-                    #min_dist = dist
-                    clusterId = key
+            
+            if self.auto_r:   
+                ## if we at least have two close micro clusters
+                if counter > 1:
+                    
+                    ## our threshold
+                    mu = (sumdist-min_dist)/(counter-1) 
+                    treshold = mu - self.sigma * math.sqrt(squaresum/(counter-1)  - mu**2)
+                    #treshold = mu
+                    if min_dist < treshold:
+                        clusterId = smallest_key
+            else:
+                if min_dist < self.radius:
+                        clusterId = smallest_key
+
 
             # if embedding verification is on, we test closest distance according to embedding method
-            if self.embedding_verification is True and smallest_key is not None and clusterId is None:
+            if self.embedding_verification is True and smallest_key is not None and clusterId is None and self.n > 1000:
+                
+                 ## cluster Id actually represents the number of created clusters
+                mu = self.outlier_dist_mean/self.clusterId
 
-                dist2 = self.macro_distance.dist(
-                    mc, self.microclusters[smallest_key], idf)
+         
+                sigma = 1 * math.sqrt((self.outlier_dist_square/self.clusterId)- mu**2)
+                #print(sigma)
+                #threshold = mu  - sigma
+                threshold = mu
+                #print(threshold)
+           
+                if min_dist < threshold:
+                    embedding_dist = self.macro_distance.dist(
+                        mc, self.microclusters[smallest_key], idf)
+                    
+                                    
+                    if embedding_dist <= threshold:
+                        #print(list(mc.tf.keys()))
+                        #print(list(self.microclusters[smallest_key].tf.keys()))
+                        # print("---------------------")
+                        clusterId = smallest_key
+                        #print("NO")
 
-                if dist2 <= 0.1:
-                    #min_dist = dist
-                    print(list(mc.tf.keys()))
-                    print(list(self.microclusters[smallest_key].tf.keys()))
-                    #print("verify embedding dist")
-                    # print(dist2)
-                    # print("---------------------")
-                    clusterId = key
-
+                    #print("################################")
             # if we found a cluster that is close enough we merge our incoming data into it
             if clusterId is not None:
+                #print("merge")
+                self.num_merged_obs += 1
+                ## add number of observations
+                self.microclusters[clusterId].n += 1
+
                 self.microclusters[clusterId].merge(
                     mc, self.t, self.omega, self._lambda, self.termfading, self.realtime)
                 self.assignment[self.n] = clusterId
+
+                #if self.embedding_verification:
+                self.dist_mean += min_dist
+                #print(self.dist_mean)
+                #self.outlier_dist_square += min_dist*min_dist 
 
             # if no close cluster is found we create a new one
             else:
@@ -301,15 +350,23 @@ class textclust:
                 self.assignment[self.n] = clusterId
                 self.microclusters[clusterId] = mc
                 self.clusterId += 1
+                
+        else:
+            print("error")
 
         # cleanup every tgap
         if self.lastCleanup is None or self.t-self.lastCleanup >= self.tgap:
             self.cleanup()
             
             if self.callback is not None:
-                copy = deepcopy(self)
+                
+                ## we create a callback object with all the current micro clusters
+                callbackobject = {"microclusters":self.microclusters, "assignment": self.assignment, 
+                                    "radius": self.radius, "time": self.t , "n":self.n}
+                copy = deepcopy(callbackobject)
                 th = threading.Thread(target=self.callback, args=[copy])
                 th.start()
+
 
 
         self.n += 1
@@ -339,7 +396,6 @@ class textclust:
                     clusters[row], clusters[col], idf)
                 distances.loc[row, col] = dist
                 distances.loc[col, row] = dist
-        print(distances)
         return distances
 
     # calculate idf based in all micro-clusters
@@ -372,19 +428,61 @@ class textclust:
 
     def cleanup(self):
         logger.debug("initialize cleanup")
+        
+       
+        #self.outlier_dist_square = 0 
 
         # set last cleanup to now
         self.lastCleanup = self.t
 
         # update curren cluster weights
         self.updateweights()
+  
 
         # set deltaweights
         for micro in self.microclusters.values():
+            
             # here we compute delta weights
             micro.deltaweight = micro.weight - micro.oldweight
             micro.oldweight = micro.weight
 
+        # if auto merge is enabled, close micro clusters are merged together
+        if self.auto_merge:
+            self.mergemicroclusters()
+
+        ## reset merged observation
+        self.dist_mean = 0 
+        self.num_merged_obs = 0
+               
+    def mergemicroclusters(self):
+        micro_keys = [*self.microclusters]
+
+
+        idf = self.calculateIDF(self.microclusters.values())
+        i = 0
+        if self.auto_r:
+            threshold = self.dist_mean / (self.num_merged_obs+1)
+            print("threshold" + str(threshold))
+        else:
+            threshold = self.radius
+
+        while i < len(self.microclusters):
+            j = i+1
+            while j < len(self.microclusters):
+                m_dist = self.micro_distance.dist(self.microclusters[micro_keys[i]], self.microclusters[micro_keys[j]], idf)
+                ## lets merge them
+                #print(threshold)
+                #print("MDIST_"+str(m_dist))
+                if m_dist < threshold:
+                    print("merge")
+                    self.microclusters[micro_keys[i]].merge(
+                    self.microclusters[micro_keys[j]], self.t, self.omega, self._lambda, self.termfading, self.realtime)
+                    del(self.microclusters[micro_keys[j]])
+                    del(micro_keys[j])
+                else:
+                    j = j+1 
+            i = i+1
+            
     # show the contents of a specific micro cluster
     def showmicrocluster(self, id, num):
 
@@ -474,19 +572,21 @@ class textclust:
             if(len(micros)) > 1:
                 logger.debug("start macro clustering")
 
-                clusterer = SpectralClustering(
-                    assign_labels='discretize', n_clusters=numClusters, random_state=0, affinity="precomputed")
-                #clusterer = AgglomerativeClustering(n_clusters=numClusters, linkage="single", affinity="precomputed")
+                #clusterer = SpectralClustering(
+                #    assign_labels='discretize', n_clusters=numClusters, random_state=0, affinity="precomputed")
+                clusterer = AgglomerativeClustering(n_clusters=numClusters, linkage="complete", affinity="precomputed")
 
                 # shift to similarity matrix
-                if self.conf["macro_distance"] == "word_mover_distance":
+                #if self.conf["macro_distance"] == "word_mover_distance":
                     # print("WMD")
-                    distm = 1./(1.+self.get_distance_matrix(micros))
-                else:
+                #    distm = 1./(1.+self.get_distance_matrix(micros))
+                #else:
                     #print("NO WMD")
-                    distm = 0.5*((1-self.get_distance_matrix(micros))+1)
+                #    distm = 1- self.get_distance_matrix(micros)
+                    #distm = 0.5*((1-self.get_distance_matrix(micros))+1)
                 #distm = np.exp(-self.get_distance_matrix(micros))
-
+                distm = self.get_distance_matrix(micros)
+                print(distm)
                 logger.debug(distm)
 
                 assigned_clusters = list(clusterer.fit(distm).labels_)
@@ -567,7 +667,6 @@ class textclust:
 
             # inputs are also processed by the preprocessor
             processed_text = input.preprocessor.preprocess(point.text)
-
             # term frequency table is created
             tf = self.create_frequency_tables(processed_text, point.id)
 
@@ -591,6 +690,7 @@ class textclust:
 
                 # add assignment
                 assignment.append(closest)
+                #self.showmicrocluster(self.microclusters[closest].id,10)
 
             # if our tf is empty we append an "NA" assignment, indicating that this observation should be discarded
             else:

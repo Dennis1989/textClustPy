@@ -1,8 +1,12 @@
 import setuptools
 from subprocess import CalledProcessError
+import sys
+
+__version__ = "0.0.2"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
+
 
 setuptools.setup(
     name="textClustPy",
