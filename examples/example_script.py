@@ -6,6 +6,7 @@ from textClustPy import microcluster
 import time
 import logging
 
+
 def clust_callback(textclust):
         for item in textclust.get_microclusters().values():
             print(item.tf)

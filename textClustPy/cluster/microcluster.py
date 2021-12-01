@@ -36,6 +36,7 @@ class microcluster:
         self.deltaweight = 0
         self.realtime = realtime
         self.textids = [textid]
+        self.n = 1
     
     ## fading micro cluster weights and also term weights, if activated
     def fade(self, tnow, omega, _lambda, termfading, realtime):
@@ -50,6 +51,10 @@ class microcluster:
 
     ## merging two microclusters into one
     def merge(self, microcluster, t, omega, _lambda, termfading, realtime):
+        
+        ## add textids
+        self.textids = self.textids + microcluster.textids
+        
         self.realtime = realtime
         
         self.weight = self.weight + microcluster.weight

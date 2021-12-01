@@ -3,6 +3,8 @@ from textClustPy.cluster.microcluster import microcluster
 from textClustPy.inputs.inputs import Input
 from textClustPy.inputs.inputs import Observation
 from textClustPy.inputs.csv_input import CSVInput
+from textClustPy.inputs.json_input import JsonInput
+from textClustPy.inputs.jsonL_input import JsonLInput
 from textClustPy.inputs.inmem_input import InMemInput
 from textClustPy.inputs.preprocessor import Preprocessor
 from textClustPy.inputs.twitter_input import TwitterInput

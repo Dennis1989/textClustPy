@@ -32,7 +32,7 @@ class Preprocessor:
     config = dict()
     
     def __init__(self, language="english", stopword_removal=True, stemming=False, punctuation=True,
-                 hashtag=True, username=True, url=True, max_grams=1):
+                 hashtag=True, username=True, url=True, max_grams=1, exclude_tokens = None):
         super().__init__()
 
         self.language = language
@@ -41,6 +41,11 @@ class Preprocessor:
         self.username = username
         self.url = url
         self.max_grams = max_grams
+        
+        if exclude_tokens == None:
+            self.exclude_tokens = []
+        else:
+            self.exclude_tokens = exclude_tokens
 
         if stopword_removal:
             self.stopwords = stopwords.words(self.language)
@@ -60,10 +65,11 @@ class Preprocessor:
         :type observation_text: string
         '''
         text = observation_text
+        
 
         # convert text to lower-case
         text = text.lower()
-        
+ 
         # remove URLs
         if self.url:
             text = re.sub('((www\.[^\s]+)|(https?://[^\s]+)|(http?://[^\s]+))', '', text)
@@ -87,6 +93,11 @@ class Preprocessor:
             text = [char for char in text if char not in exclude]
             # Join the characters again to form the string.
             text = ''.join(text)
+        
+        # remove exlude words
+        if len(self.exclude_tokens) is not 0:
+            resultwords  = [word for word in text.split() if word not in self.exclude_tokens]
+            text = ' '.join(resultwords)
 
         ## here we create a frequency table of the current sentence
         processed_words = list()

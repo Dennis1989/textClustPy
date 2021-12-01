@@ -16,7 +16,7 @@ from textClustPy import Observation
 ## implementation of abstract class
 class InMemInput(Input):
     '''
-    :param pdframe: pandas data frame that serves as stream input
+    :param pdframe: Pandas data frame that serves as stream input
     :type pdframe:  DataFrame
     :param col_id: Column index that contains the text id 
     :type col_id: int

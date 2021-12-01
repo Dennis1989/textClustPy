@@ -11,7 +11,7 @@ import string
 import time
 from datetime import datetime
 import re
-#from ..util.inkrementalskip import inkrementalskip
+
 
 
 logger = logging.getLogger(__name__)
@@ -34,27 +34,29 @@ class Observation:
 
 class Input(ABC):
     """
-    Abstract class of input
+    Abstract input class
 
-    :param textclust: A textclust instance of :class:`textClustPy.textclust`
+    :param textclust: A textclust instance of type :class:`textClustPy.textclust`
     :type textclust: :class:`textClustPy.textclust`
-    :param preprocessor: Preprocessor instance
+    :param preprocessor: Preprocessor instance of type :class:`textClustPy.textclust`
     :type preprocessor: :class:`textClustPy.Preprocessor`
-    :param timeformat: Specifies how time is formatted. Described as strftime directives (see https://strftime.org)
+    :param timeformat: Specifies the time format. Described as strftime directives (see https://strftime.org). Default is: *%Y-%m-%d %H:%M:%S*
     :type config: string
     :param timeprecision: If realtimefading is enabled, timeprecision specifies on which time unit the fading factor is applied (seconds/minutes/hours). Default = "seconds"
     :type timeprecision: string
-    :param config: relative path/name of config file
+    :param config: Relative path/name of config file
     :type config: string
+    :param callback: Callback function that is called for each incoming observation. The callback function expects four parameters: *ID, time, text* and a *Observation* object. 
+    :type callback: function
     """
 
-    def __init__(self, textclust, preprocessor, timeformat="%Y-%m-%d %H:%M:%S", timeprecision="seconds", config=None):
+    def __init__(self, textclust, preprocessor, timeformat="%Y-%m-%d %H:%M:%S", timeprecision="seconds", config=None, callback = None):
         super().__init__()
         self.ps = PorterStemmer()
 
         # load config
         self.conf = self.loadconfig("input_config.json") if config else None
-
+        self.callback = callback
         self.stopWords = set(stopwords.words(preprocessor.language))
 
         # create textclust instance based on given config
@@ -84,16 +86,17 @@ class Input(ABC):
         with open(filename) as json_file:
             return json.load(json_file)
 
+    
     # this is always the same. Data is processed
-
     def processdata(self, observation):
+        
+        ## if callback is set call it
+        if self.callback is not None:
+            self.callback(observation.id, observation.time, observation.text, observation.object)
 
         # tokenize words and remove stopwords and additional stuff
         processed_text = self.preprocessor.preprocess(observation.text)
 
-        # if we have a live embedding, the model has to be updated with the processed text
-        # if isinstance(self.clust.model, inkrementalskip):
-        #    self.clust.model.train(processed_text)
 
         # now we handle realtime fading
         if self.clust.realtimefading:
@@ -113,13 +116,17 @@ class Input(ABC):
             if self.timeprecision == "hours":
                 cur_time = cur_time / 60
 
-            self.clust.update(processed_text, observation.id,
+            clustID = self.clust.update(processed_text, observation.id,
                               cur_time, observation.time)
 
         else:
-            self.clust.update(processed_text, observation.id,
+            clustID = self.clust.update(processed_text, observation.id,
                               None, observation.time)
 
         self.debug_output()
 
         self.counter += 1
+        
+        return clustID
+
+

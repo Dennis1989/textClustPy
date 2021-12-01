@@ -10,5 +10,7 @@
         "idf": true,
         "num_macro":5,
         "minWeight": 1,
-        "embedding_verification":false
+        "embedding_verification":false,
+        "auto_r":true,
+        "auto_merge":true
 }

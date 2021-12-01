@@ -21,6 +21,8 @@ logger.setLevel(logging.INFO)
 
 ## distance class to implement different micro/macro distance metrics
 class distances:
+
+    ## constructor
     def __init__(self, type, model):
         self.type = type
         self.model = model
@@ -58,27 +60,6 @@ class distances:
             return 1
         else: 
             return round((1-sum/(tfidflen*microtfidflen)), 10)
-    
-    ##DEPRECATED: calculate extended cosine similarity bases on tf-idf
-    def extended_cosine_distance(self, mc, microcluster, idf):
-        sum = 0
-        tfidflen = 0
-        microtfidflen=0  
-        meantf = statistics.mean([i["tf"] for i in mc.tf.values()])
-        meanmicrotf = statistics.mean([i["tf"] for i in microcluster.tf.values()])
-        for k in list(mc.tf.keys()):
-            if k in idf:
-                if k in microcluster.tf:
-                    sum  += ((mc.tf[k]["tf"] *  idf[k] - meantf) * (microcluster.tf[k]["tf"] * idf[k])-meanmicrotf)
-                tfidflen += ((mc.tf[k]["tf"] * idf[k]- meantf) * (mc.tf[k]["tf"] * idf[k]-meantf))
-        tfidflen = math.sqrt(tfidflen)
-        for k in list(microcluster.tf.keys()):
-            microtfidflen += ((microcluster.tf[k]["tf"]*idf[k]-meanmicrotf) * (microcluster.tf[k]["tf"] *idf[k]-meanmicrotf))
-        microtfidflen = math.sqrt(microtfidflen)
-        if tfidflen==0 or microtfidflen==0:
-            return 1
-        else: return round((1 - sum/(tfidflen*microtfidflen)), 10)
-
     
   
     ## word mover distance based on model word embeddings
@@ -125,17 +106,12 @@ class distances:
             logger.debug("distances: {}".format(dist))
             return dist
 
-    ## DEPRECATED
-    def weighted_embedding_dist(self, tokens1, tokens2, weights1, weights2):
-        v1 = [self.model[word] * weights1[index] for index, word in enumerate(tokens1)]
-        v2 = [self.model[word] * weights2[index] for index, word in enumerate(tokens2)]
-        return np.dot(matutils.unitvec(np.array(v1).mean(axis=0)), matutils.unitvec(np.array(v2).mean(axis=0)))
-    
-
     ## helper function to filter out all relevant tokens that should be used
     def filter_clusters(self, cluster, max_num=10):
+        
         ## list of terms
         l = list()
+        
         ## list of weights
         w = list()
        

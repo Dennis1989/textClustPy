@@ -15,7 +15,7 @@ class CSVInput(Input):
     """
     This class implements the a csv input
 
-    :param csvfile: relative path and filename of the csv document
+    :param csvfile: Relative path and filename of the csv document
     :type csvfile:  string
     :param delimiter: Delimiter that separates different columns
     :type delimiter: char
@@ -29,7 +29,7 @@ class CSVInput(Input):
     :type col_time: int
     :param col_text: Column index that contains the text
     :type col_text: int
-    :param col_text: Column index that contains the true cluster belonging
+    :param col_label: Column index that contains the true cluster belonging
     :type col_label: int 
     """
 
