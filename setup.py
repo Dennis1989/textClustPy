@@ -10,13 +10,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="textClustPy",
-    version="0.0.1",
+    version="0.0.2",
     author="Dennis Assenmacher and Matthias Carnein",
     author_email="dennis.assenmacher@wi.uni-muenster.de",
     description="A python implementation of textclust",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://wiwi-gitlab.uni-muenster.de/d_asse011/textclustpy",
+    url="https://github.com/Dennis1989/textClustPy",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -24,5 +24,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.7',
-    install_requires=['nltk', 'pandas', 'gensim', 'numpy','sklearn', "tweepy", "elasticsearch", "jsonpickle"],
+    install_requires=['nltk', 'pandas', 'gensim', 'numpy','sklearn', "tweepy","jsonpickle"],
 )

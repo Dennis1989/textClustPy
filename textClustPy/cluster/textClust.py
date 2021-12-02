@@ -75,7 +75,7 @@ class textclust:
     # constructor with default specification
     def __init__(self, radius=0.3, _lambda=0.0005, tgap=100, verbose=None,
                  termfading=True, realtimefading=True, micro_distance="tfidf_cosine_distance",
-                 macro_distance="cosine_distance", model=None, idf=True,
+                 macro_distance="tfidf_cosine_distance", model=None, idf=True,
                  num_macro=3, minWeight=0, config=None, embedding_verification=False, callback=None, 
                  auto_r = False, auto_merge = True, sigma= 1
                  ):

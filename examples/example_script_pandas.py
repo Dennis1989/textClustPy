@@ -15,25 +15,9 @@ df = pd.read_csv(z.open('newsCorpora.csv'), sep="\t", header=None)
 ## create datetime from timestamp
 df[7] = [datetime.fromtimestamp(x/1000) for x in df[7]]
 
-topics = np.unique(df[5])
-
-d = {}
-counter = 1
-for x in topics:    
-    d[x] =  counter
-    counter += 1
-
-new_col = []
-
-for news in df[5]:
-    new_col.append(d[news])
-
-df["label"] = new_col
-
-df.to_csv("cleaned.csv", sep ="\t", header = None, index=False, index_label=False)
 
 ## create textclust instance
-clust = textclust(radius=0.5, _lambda=0.05, auto_r= True, model="skipgram", tgap=5, macro_distance="embedding_cosine_distance", num_macro=10, embedding_verification= True)
+clust = textclust(radius=0.5, _lambda=0.05, auto_r= True, tgap=5, num_macro=10)
 preprocessor = Preprocessor(max_grams=2)
 
 ## create input
@@ -48,8 +32,4 @@ clust.showclusters(10, 10, "micro")
 
 
 clust.showclusters(10, 10, type="macro")
-
-
-
-print("y")
 

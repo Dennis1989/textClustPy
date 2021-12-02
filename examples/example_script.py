@@ -3,21 +3,33 @@ from textClustPy import Preprocessor
 from textClustPy import CSVInput
 from textClustPy.inputs.inputs import Observation
 from textClustPy import microcluster
-import time
-import logging
+import pandas as pd
+import pandas as pd
+from datetime import datetime
+import requests, zipfile, io
 
 
-def clust_callback(textclust):
-        for item in textclust.get_microclusters().values():
-            print(item.tf)
+def clust_callback(object):
+        print(object["microclusters"])
+
+## first we get a csv file
+r = requests.get('https://archive.ics.uci.edu/ml/machine-learning-databases/00359/NewsAggregatorDataset.zip')
+z = zipfile.ZipFile(io.BytesIO(r.content))
+df = pd.read_csv(z.open('newsCorpora.csv'), sep="\t", header=None)
+
+## create datetime from timestamp
+df[7] = [datetime.fromtimestamp(x/1000) for x in df[7]]
+
+## save locally as csv file
+df.to_csv("newsCorpora.csv",index=False,sep="\t")
 
 
 ## create textclust instance
-clust = textclust(config="textclust_config.json", callback = clust_callback)
+clust = textclust( radius=0.5, _lambda=0.01, tgap=10, auto_r=True, callback = clust_callback)
 preprocessor = Preprocessor(max_grams=2)
 
-## create input
-input = CSVInput(textclust=clust, preprocessor=preprocessor , config="input_config.json")
+## create csv input
+input = CSVInput('newsCorpora.csv', textclust=clust, preprocessor=preprocessor , delimiter="\t",col_text=1,col_id=0,col_time=7,timeformat="%Y-%m-%d %H:%M:%S.%f", timeprecision="minutes")
 
 ## update the algorithm (1000 steps)
 input.update(1000)
@@ -44,11 +56,12 @@ print(clust.get_microToMacro())
 clust.showclusters(10,10,"macro")
 
 ## create a new Observation
-new_obs = Observation("testtest")
-## get cluster assignment for new observation
-assignment = clust.get_assignment([Observation("test"), 
-    Observation("test number 2")], input, "micro")
+new_obs = Observation("titanfall is a new game")
 
-## show closest micro cluster
+## get cluster assignment for new observations
+assignment = clust.get_assignment([Observation("titanfall is a new game"), 
+    Observation("russian pipelines")], input, "micro")
+
+## show closest micro cluster for both observations
 clust.showmicrocluster(assignment[0], 10)
 clust.showmicrocluster(assignment[1], 10)
